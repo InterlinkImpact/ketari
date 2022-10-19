@@ -5,6 +5,7 @@ const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const mongoose = require('mongoose');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 
 
 //delete after testing
@@ -24,6 +25,7 @@ app.use(bodyParser.json());
 //app.use(fileupload());
 app.use(express.static("public"));
 app.use(cors());
+app.use(cookieParser());
 
 
 const url = process.env.DB_URL;

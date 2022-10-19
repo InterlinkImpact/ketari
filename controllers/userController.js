@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 
 const rounds = 10;
 const User = require('../models/userModel');
+const isAuthenticated = require('../middleware/auth');
 const { json } = require("body-parser");
 const userUrl = express.Router();
 
@@ -17,48 +18,31 @@ userUrl.route("/signin")
     var uPassword = r.password;
     var uDetail = r.email;
 
-    console.log(r);
-    console.log(uPassword);
-    console.log(uDetail);
+    // console.log(r);
+    // console.log(uPassword);
+    // console.log(uDetail);
 
     User.findOne(
         {email: uDetail},
         function(err, data){
             if(!err){
                 try{
-                    console.log(data);
-                    // const match = bcrypt.compareSync(uPassword, data.password);
-                    // if(match){
-                    //     const token = jwt.sign(
-                    //         {user_id: data._id, uDetail},
-                    //         process.env.TOKEN_KEY,
-                    //                     // {
-                    //                     //     expiresIn: "24h",
-                    //                     // }
-                    //         );
-            
-                    //     var mergeData = {data, token};
-            
-                    //     res.send(mergeData);
-                    // }
-                    // else{
-                    //     res.send("Wrong");
-                    // }
                     bcrypt.compare(uPassword, data.password).then(function(result){
                         if(result == true){
                             //res.send(data.email);
-                            console.log(data.password);
+                            //console.log(data.password);
                             const token = jwt.sign(
                                 {user_id: data._id, uDetail},
                                 process.env.TOKEN_KEY,
-                                // {
-                                //     expiresIn: "24h",
-                                // }
+                                {
+                                    expiresIn: "24h",
+                                }
                             );
     
                             var mergeData = {data, token};
     
-                            res.send(mergeData);
+                            // res.send(mergeData);
+                            res.cookie({"token": token}).json({data: mergeData});
                             
                         }
                         else{
@@ -83,31 +67,32 @@ userUrl.route("/signin")
     var uPassword = r.password;
     var uDetail = r.email;
 
-    console.log(r);
-    console.log(uPassword);
-    console.log(uDetail);
+    // console.log(r);
+    // console.log(uPassword);
+    // console.log(uDetail);
 
     User.findOne(
         {email: uDetail},
         function(err, data){
             if(!err){
                 try{
-                    console.log(data);
+                    // console.log(data);
                     bcrypt.compare(uPassword, data.password).then(function(result){
                         if(result == true){
                             //res.send(data.email);
-                            console.log(data.password);
+                            // console.log(data.password);
                             const token = jwt.sign(
                                 {user_id: data._id, uDetail},
                                 process.env.TOKEN_KEY,
-                                // {
-                                //     expiresIn: "24h",
-                                // }
+                                {
+                                    expiresIn: "24h",
+                                }
                             );
     
                             var mergeData = {data, token};
     
-                            res.send(mergeData);
+                            //res.send(mergeData);
+                            res.cookie({"token": token}).json({data: mergeData});
                             
                         }
                         else{
@@ -130,58 +115,92 @@ userUrl.route("/signin")
 
 //utk sign in
 userUrl.route("/signup")
-.post(function(req, res){
+.post(async function(req, res){
 
     const r = req.body;
     var uPassword = r.password;
     var uEmail = r.email;
 
-    bcrypt.genSalt(rounds, function(err, salt){
-        if(err){
-            res.send(err);
+    try{
+        //check if already exist
+        const userExist = await User.findOne({ email: uEmail });
+
+        if(userExist){
+            return res.json({ msg: 'Already exist' });
         }
-        else{
-            bcrypt.hash(uPassword, salt, function(err, hash){
-                if(err){
-                    res.send(err);
-                }
-                else{
-                    const newUser = User({
-                        email: uEmail,
-                        password: hash,
-                        name: r.name,
-                        username: r.username,
-                    });
 
-                    newUser.save(function(err, data){
-                        if(!err){
-                            //res.send("New User Added " + data._id);
+        bcrypt.genSalt(rounds, function(err, salt){
+            if(err){
+                res.send(err);
+            }
+            else{
+                bcrypt.hash(uPassword, salt, function(err, hash){
+                    if(err){
+                        res.send(err);
+                    }
+                    else{
+                        const newUser = User({
+                            email: uEmail,
+                            password: hash,
+                            name: r.name,
+                            username: r.username,
+                        });
+    
+                        newUser.save(function(err, data){
+                            if(!err){
+                                //res.send("New User Added " + data._id);
+    
+                                //token
+                                const token = jwt.sign(
+                                    {user_id: data._id, uEmail},
+                                    process.env.TOKEN_KEY,
+                                    {
+                                        expiresIn: "24h",
+                                    }
+                                );
+                                
+                                var mergeData = {data, token};
+    
+                                //res.send(mergeData);
 
-                            //token
-                            const token = jwt.sign(
-                                {user_id: data._id, uEmail},
-                                process.env.TOKEN_KEY,
-                                // {
-                                //     expiresIn: "24h",
-                                // }
-                            );
-                            
-                            var mergeData = {data, token};
+                                res.cookie({"token": token}).json({data: mergeData});
+    
+                            }
+                            else{
+                                res.send(err);
+                            }
+                        });
+    
+                        //res.send(json(saveUser));
+                    }
+                });
+            }
+        });
 
-                            res.send(mergeData);
+    }
+    catch(err){
+        res.json({error : err });
+    }
 
-                        }
-                        else{
-                            res.send(err);
-                        }
-                    });
+});
 
-                    //res.send(json(saveUser));
-                }
-            });
+
+//creating user route to fetch user data
+userUrl.route("/user")
+.get(isAuthenticated, async function(req, res){
+    try{
+        const user = await User.find();
+
+        if(!user){
+            res.json({msj: "No user"});
         }
-    });
 
+        res.json({user: user});
+        
+    }
+    catch(err){
+        res.json({error: err});
+    }
 });
 
 
